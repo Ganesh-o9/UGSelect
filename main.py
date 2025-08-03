@@ -74,7 +74,7 @@ client = SecureAPIClient()
 apis = client.get_apis()
 
 # Global variables
-watermark = "UG"  # Default value
+watermark = "svm's"  # Default value
 count = 0
 userbot = None
 timeout_duration = 300  # 5 minutes
@@ -1432,5 +1432,168 @@ async def text_handler(bot: Client, m: Message):
 
     except Exception as e:
         await m.reply_text(str(e))
+
+
+
+
+
+
+
+
+@bot.on_message(filters.command(["txt"]) & filters.private)
+async def txt_downloader(bot: Client, m: Message):
+    """Handle txt file downloads with similar UI to drm command"""
+    try:
+        # Check authorization
+        if not db.is_user_authorized(m.from_user.id, bot.me.username):
+            await m.reply_text("❌ You are not authorized to use this command.")
+            return
+
+        editable = await m.reply_text(
+            "**Hello**, I am TXT Downloader Bot.\n"
+            "I can download videos from text files.\n\n"
+            "Now send your TXT file:"
+        )
+        
+        # Get TXT file
+        input_msg = await bot.listen(editable.chat.id)
+        if not input_msg.document or not input_msg.document.file_name.endswith('.txt'):
+            await m.reply_text("❌ Please send a valid .txt file!")
+            return
+            
+        x = await input_msg.download()
+        await input_msg.delete(True)
+
+        # Process file
+        try:
+            with open(x, "r", encoding='utf-8') as f:
+                content = f.read().split("\n")
+            links = [line.split("://", 1) for line in content if "://" in line]
+            os.remove(x)
+        except Exception as e:
+            await m.reply_text(f"❌ Error processing file: {str(e)}")
+            if os.path.exists(x):
+                os.remove(x)
+            return
+
+        # Get download parameters
+        await editable.edit(f"Total links found: {len(links)}\nSend starting index (default: 1):")
+        input0 = await bot.listen(editable.chat.id, timeout=60)
+        raw_text = input0.text if input0.text else "1"
+        await input0.delete(True)
+
+        await editable.edit("Enter Batch Name or send /d for default:")
+        input1 = await bot.listen(editable.chat.id, timeout=60)
+        raw_text0 = input1.text
+        await input1.delete(True)
+        b_name = os.path.splitext(os.path.basename(x))[0] if raw_text0 == '/d' else raw_text0
+
+        await editable.edit("Enter resolution (144, 240, 360, 480, 720, 1080):")
+        input2 = await bot.listen(editable.chat.id, timeout=60)
+        raw_text2 = input2.text if input2.text else "480"
+        await input2.delete(True)
+        quality = f"{raw_text2}p"
+
+        await editable.edit("Enter watermark text or send /d:")
+        inputx = await bot.listen(editable.chat.id, timeout=60)
+        watermark = inputx.text if inputx.text != '/d' else "UG"
+        await inputx.delete(True)
+
+        await editable.edit("Enter credit text or send /d:")
+        input3 = await bot.listen(editable.chat.id, timeout=60)
+        CR = input3.text if input3.text != '/d' else CREDIT
+        await input3.delete(True)
+
+        await editable.edit("Send thumbnail (photo) or /d for default:")
+        thumb = "/d"
+        try:
+            input6 = await bot.listen(editable.chat.id, timeout=60)
+            if input6.photo:
+                thumb = f"downloads/thumb_{m.from_user.id}.jpg"
+                await bot.download_media(input6.photo, file_name=thumb)
+            await input6.delete(True)
+        except:
+            pass
+
+        await editable.edit("Enter channel ID to upload or /d for current chat:")
+        input7 = await bot.listen(editable.chat.id, timeout=60)
+        channel_id = m.chat.id if input7.text == '/d' else int(input7.text)
+        await input7.delete(True)
+        await editable.delete()
+
+        # Start processing
+        start_idx = max(1, int(raw_text)) - 1
+        failed_count = 0
+
+        if channel_id != m.chat.id:
+            batch_msg = await bot.send_message(channel_id, f"**🎯 Batch:** {b_name}")
+            await bot.pin_chat_message(channel_id, batch_msg.id)
+
+        for i in range(start_idx, len(links)):
+            try:
+                name_part, url_part = links[i]
+                url = "https://" + url_part.replace("file/d/","uc?export=download&id=")
+                
+                name1 = name_part.replace("\t", "").replace(":", "").replace("/", "").replace("+", "").replace("#", "").replace("|", "").replace("@", "").replace("*", "").replace(".", "").replace("https", "").replace("http", "").strip()
+                name = f'{str(i+1).zfill(3)} {name1[:60]}'
+
+                cc = (
+                    f"<b>──────  <i>VID ID </i>: {str(i+1).zfill(3)}  ──────</b>\n\n"
+                    f"<b>🎥 ᴛɪᴛʟᴇ</b> : {name1}\n\n"
+                    f"<blockquote><b>💠 ʙᴀᴛᴄʜ :</b> {b_name}</blockquote>\n"
+                    f"<b> 📥 ᴇxᴛʀᴀᴄᴛᴇᴅ ʙʏ :</b> {CR}"
+                )
+
+                if "youtu" in url:
+                    ytf = f"bv*[height<={raw_text2}][ext=mp4]+ba[ext=m4a]/b[height<=?{raw_text2}]"
+                else:
+                    ytf = f"b[height<={raw_text2}]/bv[height<={raw_text2}]+ba/b/bv+ba"
+
+                cmd = f'yt-dlp -f "{ytf}" "{url}" -o "{name}.mp4"'
+
+                Show = f"<i><b>⚡Downloading {str(i+1).zfill(3)}/{len(links)}</b></i>\n<blockquote><b>{name1}</b></blockquote>"
+                prog = await bot.send_message(channel_id, Show, disable_web_page_preview=True)
+                
+                res_file = await helper.download_video(url, cmd, name)
+                filename = res_file[0] if isinstance(res_file, list) else res_file
+                
+                await prog.delete(True)
+                await helper.send_vid(bot, m, cc, filename, thumb, name, prog, channel_id, watermark=watermark)
+                
+                time.sleep(2)
+                
+            except Exception as e:
+                failed_count += 1
+                await bot.send_message(
+                    channel_id, 
+                    f"⚠️ Failed: {str(i+1).zfill(3)} {name1}\nError: {str(e)}",
+                    disable_web_page_preview=True
+                )
+                continue
+
+        success_count = len(links) - failed_count
+        await bot.send_message(
+            channel_id,
+            f"✅ Completed!\n\n"
+            f"Total: {len(links)}\n"
+            f"Success: {success_count}\n"
+            f"Failed: {failed_count}\n\n"
+            f"Batch: {b_name}"
+        )
+
+    except Exception as e:
+        await m.reply_text(f"❌ Error: {str(e)}")
+
+
+
+
+
+
+
+
+
+
+
+
 
 bot.run()
