@@ -363,7 +363,7 @@ async def unauthorized_handler(client, message: Message):
         "<blockquote>You need to have an active subscription to use this bot.\n"
         "Please contact admin to get premium access.</blockquote>",
         reply_markup=InlineKeyboardMarkup([[
-            InlineKeyboardButton("💫 Get Premium Access", url="https://t.me/ItsUGBot")
+            InlineKeyboardButton("💫 Get Premium Access", url="http://t.me/Svm_contact_bot")
         ]])
     )
 
